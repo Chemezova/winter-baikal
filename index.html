@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Зимний Байкал</title>
+<meta name="description" content="Авторский путеводитель Елены Чемезовой по зимнему Байкалу">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111b28" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Зимний Байкал">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Raleway:ital,wght@0,400;0,600;1,500&family=Roboto:wght@400;500&display=swap">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="cover" class="cover" hidden>
+  <div class="in">
+    <img class="bg" src="cover.jpg" alt="">
+    <img src="cover.jpg" alt="Обложка путеводителя «Зимний Байкал»">
+    <div class="bottom gut"><button class="open" type="button" id="open">Открыть путеводитель</button><p id="cover-note"></p></div>
+  </div>
+</div>
+
+<div id="lock" class="lock" hidden>
+  <div class="lock-in gut">
+    <span class="nerpa-face" data-nerpa-face></span>
+    <h1>Зимний Байкал</h1>
+    <p>Введите личный код из письма после покупки. Это нужно сделать один раз: дальше путеводитель откроется на этом телефоне и без интернета.</p>
+    <form id="lock-form">
+      <input id="code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="BAIKAL-XXXX-XXXX" aria-label="Код доступа">
+      <button class="btn solid" type="submit" id="lock-go">Открыть</button>
+    </form>
+    <p class="lock-err" id="lock-err" hidden></p>
+  </div>
+</div>
+
+<div class="app" id="app" hidden>
+  <main id="view"></main>
+</div>
+
+<button class="nerpa-btn" type="button" data-nerpa aria-label="Спросить нерпёнка" hidden><span data-nerpa-face></span></button>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="panel gut" role="dialog" aria-modal="true" aria-labelledby="nerpa-title">
+    <div class="nerpa-head">
+      <span data-nerpa-face></span>
+      <div class="bubble" id="nerpa-title">Привет! Я нерпёнок. Подскажу, где в путеводителе ответ. Что ищем?</div>
+      <button class="x" type="button" id="nerpa-close" aria-label="Закрыть">×</button>
+    </div>
+    <form class="search" id="search-form">
+      <input id="q" type="search" placeholder="Например: как добраться до Ольхона" autocomplete="off" aria-label="Что ищем">
+    </form>
+    <div class="sugg" id="sugg"></div>
+    <div class="res" id="res" aria-live="polite"></div>
+  </div>
+</div>
+
+<nav class="tabs" id="tabs" aria-label="Разделы" hidden>
+  <div class="tabs-in">
+    <a href="#/home" data-tab="home" data-ico="home">Главная</a>
+    <a href="#/menu" data-tab="menu" data-ico="list">Содержание</a>
+    <a href="#/routes" data-tab="routes" data-ico="cal">Маршруты</a>
+    <a href="#/fav" data-tab="fav" data-ico="heart">Избранное</a>
+  </div>
+</nav>
+
+<div class="toast" id="toast" role="status" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>
