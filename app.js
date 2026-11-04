@@ -698,6 +698,11 @@ async function start(code) {
   KEY = k;
   await loadGuide();
   $('#cover-note').textContent = D.guide.updated ? `Обновление от ${new Date(D.guide.updated + 'T12:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}` : '';
+  try {
+    const v = await (await fetch('version.json')).json();
+    const note = $('#cover-note');
+    note.textContent = `${note.textContent}${note.textContent ? ' · ' : ''}версия ${v.version}, собрана ${v.built}`;
+  } catch (e) { /* без версии приложение работает как раньше */ }
   return true;
 }
 
