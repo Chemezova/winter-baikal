@@ -99,6 +99,7 @@ const imgCache = new Map();
 async function loadGuide() {
   D = JSON.parse(new TextDecoder().decode(await openFile('data/guide.bin')));
   D.hotelList = Object.entries(D.hotels).map(([id, h]) => ({ id, ...h }));
+  D.partnerName = Object.fromEntries((D.partners.partners || []).map(x => [x.id, x.name]));
 }
 
 function imgURL(path) {
@@ -143,38 +144,45 @@ const favBtn = (key, glass) => `<button class="iconbtn${glass ? ' glass' : ''}" 
 
 /* ---------------- блоки ---------------- */
 
-function mapButtons([lat, lon]) {
+function mapButtons(lat, lon) {
   return `<div class="btnrow"><a class="btn" href="https://yandex.ru/maps/?pt=${lon},${lat}&z=14&l=map" target="_blank" rel="noopener">Яндекс Карты</a>`
     + `<a class="btn" href="https://www.google.com/maps/search/?api=1&query=${lat},${lon}" target="_blank" rel="noopener">Google</a></div>`;
 }
-const linkBtns = links => Object.entries(links || {}).map(([t, u]) => `<a class="btn" href="${esc(u)}" target="_blank" rel="noopener">${esc(t)}</a>`).join('');
-const phoneLinks = phones => `<div class="phones">${(phones || []).map(p => `<a href="tel:${p.replace(/[^\d+]/g, '')}">${icon('phone')}${esc(p)}</a>`).join('')}</div>`;
-const snowList = (items, kind = 'list') => `<ul class="snow ${kind}">${(items || []).map(x =>
+const linkBtns = links => (links || []).map(l => `<a class="btn" href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.title)}</a>`).join('');
+/** Телефоны: звонок по касанию, а если отмечены мессенджеры — кнопки «написать». */
+function phoneLinks(phones, messengers = []) {
+  const intl = p => { let d = p.replace(/\D/g, ''); if (d.length === 11 && d[0] === '8') d = '7' + d.slice(1); return d; };
+  return `<div class="phones">${(phones || []).map(p => {
+    const d = intl(p);
+    let s = `<a href="tel:+${d}">${icon('phone')}${esc(p)}</a>`;
+    if (messengers.includes('whatsapp')) s += `<a href="https://wa.me/${d}" target="_blank" rel="noopener">WhatsApp</a>`;
+    if (messengers.includes('telegram')) s += `<a href="https://t.me/+${d}" target="_blank" rel="noopener">Telegram</a>`;
+    if (messengers.includes('max')) s += '<span class="muted">есть в Max</span>';
+    return s;
+  }).join('')}</div>`;
+}
+const snowList = (items, kind = 'snow') => `<ul class="snow ${kind}">${(items || []).map(x =>
   `<li>${kind === 'pros' ? '<span class="mark">+</span>' : kind === 'cons' ? '<span class="mark">−</span>' : flake}<span>${md(x)}</span></li>`).join('')}</ul>`;
 
+/* Типы блоков — те же, что в schema/content.yml. Новый тип: описать там и нарисовать здесь. */
 function block(b) {
-  const k = Object.keys(b)[0];
-  const v = b[k];
   const id = b.anchor ? ` id="a-${esc(b.anchor)}"` : '';
-  switch (k) {
-    case 'text': return `<p>${md(v)}</p>`;
-    case 'heading': return `<h2${id}>${md(plain(v))}</h2>`;
-    case 'subheading': case 'subtitle': return `<h3${id}>${md(plain(v))}</h3>`;
-    case 'label': case 'dayno': return `<h4 class="label">${md(v)}</h4>`;
-    case 'callout': return `<p class="callout">${md(v)}</p>`;
-    case 'caption': return `<p class="muted small">${md(v)}</p>`;
-    case 'list': case 'pros': case 'cons': return snowList(v, k);
-    case 'photo': return `<figure><div class="frame">${img(v)}</div>${b.caption ? `<figcaption>${md(b.caption)}</figcaption>` : ''}</figure>`;
-    case 'gallery': return `<div class="gallery">${v.map(g => `<figure><div class="frame">${img(g.img)}</div>${g.caption ? `<figcaption>${md(g.caption)}</figcaption>` : ''}</figure>`).join('')}</div>`;
-    case 'map': return `<div class="mapbox">${v.img ? `<div class="frame">${img(v.img)}</div>` : ''}<div class="row">${v.caption ? `<span>${md(v.caption)}</span>` : ''}${linkBtns(v.links)}</div></div>`;
-    case 'link': return `<a class="linkbtn" href="${esc(v.url)}" target="_blank" rel="noopener"><span>${md(plain(v.title))}</span>${icon('chev')}</a>`;
-    case 'links': return `<div class="stack" style="gap:8px">${v.map(x => `<a class="linkbtn" href="${esc(x.url)}" target="_blank" rel="noopener"><span>${esc(x.title)}${x.note ? `<small>${md(x.note)}</small>` : ''}</span>${icon('chev')}</a>`).join('')}</div>`;
-    case 'plate': return `<div class="plate"${v.id ? ` id="a-${esc(v.id)}"` : ''}><h4>${flake}${md(plain(v.title))}</h4>${v.text ? `<p class="small">${md(v.text)}</p>` : ''}${v.hours ? `<div class="hours">${md(v.hours)}</div>` : ''}${v.links ? `<div class="btnrow">${linkBtns(v.links)}</div>` : ''}</div>`;
-    case 'sights': return `<div class="sights">${v.map(s => `<div class="sight"><div class="nm">${md(s.name)}${s.where ? `<small>${md(s.where)}</small>` : ''}</div>${mapButtons(s.coords)}</div>`).join('')}</div>`;
-    case 'prices': return `<table class="prices">${v.map(x => `<tr><td>${md(x.title)}</td><td>${md(x.price)}</td></tr>`).join('')}</table>`;
-    case 'organizers': return v.map(o => `<div class="card"><h4>${md(o.name)}</h4>${o.contact ? `<p class="muted small">${md(o.contact)}</p>` : ''}${phoneLinks(o.phones)}${o.trips ? snowList(o.trips) : ''}${o.links ? `<div class="btnrow">${linkBtns(o.links)}</div>` : ''}</div>`).join('');
-    case 'excursion': return `<div class="card">${v.img ? `<div class="frame">${img(v.img)}</div>` : ''}<h4>${md(v.title)}</h4>${v.text ? `<p class="small">${md(v.text)}</p>` : ''}${v.contacts ? phoneLinks(v.contacts.map(c => c.phone)) : ''}${v.links ? `<div class="btnrow">${linkBtns(v.links)}</div>` : ''}</div>`;
-    case 'slot': return `<h4 class="label">${md(v)}</h4>`;
+  switch (b.type) {
+    case 'text': return `<p>${md(b.text)}</p>`;
+    case 'heading': return `<h2${id}>${md(plain(b.text))}</h2>`;
+    case 'subheading': return `<h3${id}>${md(plain(b.text))}</h3>`;
+    case 'label': return `<h4 class="label">${md(b.text)}</h4>`;
+    case 'callout': return `<p class="callout">${md(b.text)}</p>`;
+    case 'list': return snowList(b.items, b.style || 'snow');
+    case 'photo': return `<figure><div class="frame">${img(b.img)}</div>${b.caption ? `<figcaption>${md(b.caption)}</figcaption>` : ''}</figure>`;
+    case 'gallery': return `<div class="gallery">${(b.items || []).map(g => `<figure><div class="frame">${img(g.img)}</div>${g.caption ? `<figcaption>${md(g.caption)}</figcaption>` : ''}</figure>`).join('')}</div>`;
+    case 'map': return `<div class="mapbox">${b.img ? `<div class="frame">${img(b.img)}</div>` : ''}<div class="row">${b.caption ? `<span>${md(b.caption)}</span>` : ''}${linkBtns(b.links)}</div></div>`;
+    case 'link': return `<a class="linkbtn" href="${esc(b.url)}" target="_blank" rel="noopener"><span>${md(plain(b.title))}</span>${icon('chev')}</a>`;
+    case 'links': return `<div class="stack" style="gap:8px">${(b.items || []).map(x => `<a class="linkbtn" href="${esc(x.url)}" target="_blank" rel="noopener"><span>${esc(x.title)}${x.note ? `<small>${md(x.note)}</small>` : ''}</span>${icon('chev')}</a>`).join('')}</div>`;
+    case 'plate': return `<div class="plate"${id}><h4>${flake}${md(plain(b.title))}</h4>${b.text ? `<p class="small">${md(b.text)}</p>` : ''}${b.hours ? `<div class="hours">${md(b.hours)}</div>` : ''}${b.links?.length ? `<div class="btnrow">${linkBtns(b.links)}</div>` : ''}</div>`;
+    case 'sights': return `<div class="sights">${(b.items || []).map(s => `<div class="sight"><div class="nm">${md(s.name)}${s.where ? `<small>${md(s.where)}</small>` : ''}</div>${mapButtons(s.lat, s.lon)}</div>`).join('')}</div>`;
+    case 'prices': return `<table class="prices">${(b.items || []).map(x => `<tr><td>${md(x.title)}</td><td>${md(x.price)}</td></tr>`).join('')}</table>`;
+    case 'organizers': return (b.items || []).map(o => `<div class="card"><h4>${md(o.name)}</h4>${o.contact ? `<p class="muted small">${md(o.contact)}</p>` : ''}${phoneLinks(o.phones, o.messengers)}${o.trips?.length ? snowList(o.trips) : ''}${o.links?.length ? `<div class="btnrow">${linkBtns(o.links)}</div>` : ''}</div>`).join('');
     default: return '';
   }
 }
@@ -183,7 +191,7 @@ const blocks = list => `<div class="blocks">${(list || []).map(block).join('')}<
 /* ---------------- экраны ---------------- */
 
 const groups = () => D.guide.menu;
-const groupOf = (kind, id) => groups().find(g => g.items.some(it => it[kind] === id));
+const groupOf = (kind, id) => groups().find(g => g.items.some(it => it.kind === kind && it.ref === id));
 const titleOf = (kind, id) => {
   const r = { page: D.pages, place: D.places, route: D.routes }[kind]?.[id];
   if (!r) return id;
@@ -202,7 +210,7 @@ function hero(cover, eyebrow, title, favKey) {
 }
 
 function screenHome() {
-  const placesGrp = groups().find(g => g.items.some(i => i.place));
+  const placesGrp = groups().find(g => g.items.some(i => i.kind === 'place'));
   const prep = groups().find(g => g.group.startsWith('Подготовка'));
   const about = groups().find(g => g.group.startsWith('О путеводителе'));
   const plan = store.get('plan', null);
@@ -225,8 +233,8 @@ function screenHome() {
     <div class="block stack">
       <div class="rowhead"><h2>${esc(placesGrp.group)}</h2><a href="#/menu">Все разделы</a></div>
       <div class="carousel">${placesGrp.items.map(it => {
-        const p = D.places[it.place];
-        return p ? `<a class="pcard" href="#/place/${it.place}/about"><span class="ph">${img(p.cover)}<span>${esc(p.title)}</span></span></a>` : '';
+        const p = D.places[it.ref];
+        return p ? `<a class="pcard" href="#/place/${it.ref}/about"><span class="ph">${img(p.cover)}<span>${esc(p.title)}</span></span></a>` : '';
       }).join('')}</div>
     </div>
     <div class="block stack">
@@ -236,14 +244,14 @@ function screenHome() {
     <div class="block stack">
       <div class="rowhead"><h2>${esc(prep.group)}</h2></div>
       <div class="tiles">${prep.items.map(it => {
-        const p = D.pages[it.page];
+        const p = D.pages[it.ref];
         if (!p) return '';
-        return `<a class="tile${p.cover ? '' : ' noimg'}" href="#/page/${it.page}">${img(p.cover)}<span>${esc(p.title)}</span></a>`;
+        return `<a class="tile${p.cover ? '' : ' noimg'}" href="#/page/${it.ref}">${img(p.cover)}<span>${esc(p.title)}</span></a>`;
       }).join('')}</div>
     </div>
     <div class="block stack" style="padding-bottom:24px">
       <div class="rowhead"><h2>${esc(about.group)}</h2></div>
-      <div class="list-links">${about.items.map(it => `<a href="#/page/${it.page}">${flake}${esc(titleOf('page', it.page))}${icon('chev')}</a>`).join('')}</div>
+      <div class="list-links">${about.items.map(it => `<a href="#/page/${it.ref}">${flake}${esc(titleOf('page', it.ref))}${icon('chev')}</a>`).join('')}</div>
     </div>
   </div>`;
 }
@@ -254,7 +262,7 @@ function routeCards() {
 }
 
 function anchorsOf(list) {
-  return (list || []).filter(b => b.anchor && (b.heading || b.subheading)).map(b => [b.anchor, plain(b.heading || b.subheading)]);
+  return (list || []).filter(b => b.anchor && (b.type === 'heading' || b.type === 'subheading')).map(b => [b.anchor, plain(b.text)]);
 }
 
 let menuOpen = new Set(store.get('menuOpen', []));
@@ -270,7 +278,7 @@ function menuTree(filter) {
   for (const g of groups()) {
     const rows = [];
     for (const it of g.items) {
-      const [kind, id] = Object.entries(it)[0];
+      const { kind, ref: id } = it;
       const rec = { page: D.pages, place: D.places, route: D.routes }[kind]?.[id];
       if (!rec) continue;
       const title = titleOf(kind, id);
@@ -306,7 +314,7 @@ function screenPage(id) {
   if (!p) return notFound();
   const g = groupOf('page', id);
   const head = p.cover ? hero(p.cover, g?.group, p.title, `page:${id}`) : topbar(p.title, favBtn(`page:${id}`));
-  const list = (p.blocks || []).filter((b, i) => !(i === 0 && b.heading && plain(b.heading) === p.title));
+  const list = (p.blocks || []).filter((b, i) => !(i === 0 && b.type === 'heading' && plain(b.text) === p.title));
   return `${head}<div class="gut">${p.cover ? '' : `<h1 class="plain-head">${esc(p.title)}</h1>`}${blocks(list)}</div>`;
 }
 
@@ -322,7 +330,7 @@ function screenPlace(id, tab) {
   const g = groupOf('place', id);
   let body;
   if (tab === 'stay') body = staySection(id, p);
-  else body = blocks(tabBlocks(p[tab]).filter((b, i) => !(i === 0 && b.heading && Object.values(TABS).some(n => plain(b.heading).startsWith(n.split(' ')[0])))));
+  else body = blocks(tabBlocks(p[tab]).filter((b, i) => !(i === 0 && b.type === 'heading' && Object.values(TABS).some(n => plain(b.text).startsWith(n.split(' ')[0])))));
   return `${hero(p.cover, g?.group, p.title, `place:${id}`)}
   <nav class="seg gut" aria-label="Разделы локации">${tabs.map(t => `<a href="#/place/${id}/${t}" ${t === tab ? 'aria-current="page"' : ''}>${TABS[t]}</a>`).join('')}</nav>
   <div class="gut">${body}</div>`;
@@ -330,7 +338,7 @@ function screenPlace(id, tab) {
 
 function staySection(id, p) {
   const stay = p.stay || {};
-  const areas = (!Array.isArray(stay) && stay.areas) || {};
+  const areas = Object.fromEntries(((!Array.isArray(stay) && stay.areas) || []).map(a => [a.id, a]));
   const all = D.hotelList.filter(h => h.place === id);
   const st = hotelState[id] || (hotelState[id] = { area: 'all', sort: 'rec' });
   const used = Object.keys(areas).filter(a => all.some(h => h.area === a));
@@ -338,7 +346,7 @@ function staySection(id, p) {
   if (st.sort === 'price') list = [...list].sort((a, b) => (a.price_from || 1e9) - (b.price_from || 1e9));
   else if (st.sort === 'rating') list = [...list].sort((a, b) => (b.rating || 0) - (a.rating || 0));
   else list = [...list].sort((a, b) => (a.order || 0) - (b.order || 0));
-  const intro = tabBlocks(stay).filter((b, i) => !(i === 0 && b.heading));
+  const intro = tabBlocks(stay).filter((b, i) => !(i === 0 && b.type === 'heading'));
   const word = n => n % 10 === 1 && n % 100 !== 11 ? 'гостиница' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'гостиницы' : 'гостиниц';
   return `${blocks(intro)}
   ${all.length ? `<div class="stack" id="hotels" style="padding-bottom:28px">
@@ -355,21 +363,24 @@ function hotelCard(h, areaName) {
   if (h.rating) meta.push(`<span class="r"><b>${String(h.rating).replace('.', ',')}</b> Booking</span>`);
   if (h.price_from) meta.push(`<span class="price">от ${h.price_from.toLocaleString('ru-RU')} ₽</span>`);
   const site = h.site ? (/^https?:/.test(h.site) ? h.site : 'http://' + h.site) : '';
-  const book = Object.entries(h.booking || {}).map(([k, u]) => `<a class="btn" href="${esc(u)}" target="_blank" rel="noopener sponsored">${esc(D.partners[k]?.name || k)}</a>`).join('');
+  const book = (h.booking || []).map(x => `<a class="btn" href="${esc(x.url)}" target="_blank" rel="noopener sponsored">${esc(D.partnerName[x.partner] || x.partner)}</a>`).join('');
   const long = (h.text || '').length > 220;
   return `<article class="hotel" id="h-${h.id}">
     <div class="top"><div><h4>${md(plain(h.name))}</h4>${meta.length ? `<div class="meta">${meta.join('')}</div>` : ''}</div>${favBtn(`hotel:${h.id}`)}</div>
     ${areaName ? `<span class="area">${esc(areaName)}</span>` : ''}
     ${h.text ? `<p class="${long ? 'clip' : ''}">${md(h.text)}</p>${long ? '<button class="more" type="button" data-more>Читать полностью</button>' : ''}` : ''}
-    ${h.phones?.length ? phoneLinks(h.phones) : ''}
+    ${h.phones?.length ? phoneLinks(h.phones, h.messengers) : ''}
     ${h.address || site ? `<div class="addr">${h.address ? `${esc(h.address)} · <a href="https://yandex.ru/maps/?text=${encodeURIComponent(h.address)}" target="_blank" rel="noopener">на карте</a>` : ''}${site ? `${h.address ? ' · ' : ''}<a href="${esc(site)}" target="_blank" rel="noopener">сайт</a>` : ''}</div>` : ''}
     ${book ? `<div class="btnrow">${book}</div>` : ''}
   </article>`;
 }
 
 /* --- маршрут --- */
+// вариант по умолчанию — самый полный (последний в списке)
+const defaultVersion = r => r.versions[r.versions.length - 1].id;
+
 function routeDays(r, version) {
-  const v = r.versions ? (version || 'long') : null;
+  const v = r.versions?.length ? (version || defaultVersion(r)) : null;
   return (r.days || []).filter(d => !v || !d.only || d.only === v);
 }
 
@@ -387,7 +398,7 @@ function screenRoute(id) {
   if (!r) return notFound();
   const plan = store.get('plan', null);
   const mine = plan && plan.route === id ? plan : null;
-  const version = mine?.version || (r.versions ? 'long' : null);
+  const version = mine?.version || (r.versions?.length ? defaultVersion(r) : null);
   const start = mine?.start || '';
   const days = routeDays(r, version);
   const nights = (r.nights || []).map(n => {
@@ -399,7 +410,7 @@ function screenRoute(id) {
   return `${hero(r.cover, `Маршрут №${r.number}`, r.title, `route:${id}`)}
   <div class="gut"><div class="block stack">
     ${r.subtitle ? `<p class="muted small">${esc(r.subtitle)}</p>` : ''}
-    ${r.versions ? `<div class="versions" role="group" aria-label="Вариант маршрута">${Object.entries(r.versions).map(([k, t]) => `<button class="chip" type="button" data-version="${k}" aria-pressed="${version === k}">${esc(t)}</button>`).join('')}</div>` : ''}
+    ${r.versions?.length ? `<div class="versions" role="group" aria-label="Вариант маршрута">${r.versions.map(x => `<button class="chip" type="button" data-version="${esc(x.id)}" aria-pressed="${version === x.id}">${esc(x.label)}</button>`).join('')}</div>` : ''}
     <div class="daterow">
       <label for="start">Первый день поездки<input type="date" id="start" value="${start}"></label>
       <button class="btn solid" type="button" id="ics" ${start ? '' : 'disabled'}>${icon('cal')}В календарь</button>
@@ -414,9 +425,8 @@ function screenRoute(id) {
     return `<div class="day${on ? ' open' : ''}"><button type="button" data-day="${i}" aria-expanded="${on}"><span class="dt">${dt}</span><span class="h"><small>День ${i + 1}</small><b>${esc(plain(d.title))}</b></span><span class="chev">${icon('chev')}</span></button>
       <div class="more" ${on ? '' : 'hidden'}>
         ${d.summary ? `<p class="small muted">${md(d.summary)}</p>` : ''}
-        ${Object.entries(d.parts || {}).map(([part, items]) => `<div class="slot"><span>${esc(part)}</span>${snowList(items)}</div>`).join('')}
+        ${(d.parts || []).map(x => `<div class="slot"><span>${esc(x.part)}</span>${snowList(x.items)}</div>`).join('')}
         ${d.blocks?.length ? blocks(d.blocks) : ''}
-        ${d.callout ? `<p class="callout">${md(d.callout)}</p>` : ''}${d.text ? `<p>${md(d.text)}</p>` : ''}
       </div></div>`;
   }).join('')}</div><div style="height:24px"></div></div></div>`;
 }
@@ -442,7 +452,7 @@ function makeICS(id) {
     `X-WR-CALNAME:${escI(`Байкал: маршрут №${r.number}`)}`];
   days.forEach((d, i) => {
     const a = new Date(s0.getTime() + i * 864e5), z = new Date(a.getTime() + 864e5);
-    const desc = [d.summary, ...Object.entries(d.parts || {}).map(([p, items]) => `${p.toUpperCase()}:\n${items.map(x => '• ' + plain(x)).join('\n')}`)]
+    const desc = [d.summary, ...(d.parts || []).map(x => `${x.part.toUpperCase()}:\n${x.items.map(i => '• ' + plain(i)).join('\n')}`)]
       .filter(Boolean).join('\n\n') + '\n\nПутеводитель «Зимний Байкал», Елена Чемезова';
     lines.push('BEGIN:VEVENT', `UID:${id}-${i + 1}-${ymd(s0)}@baikal-guide`, `DTSTAMP:${now}`,
       `DTSTART;VALUE=DATE:${ymd(a)}`, `DTEND;VALUE=DATE:${ymd(z)}`,
@@ -573,7 +583,7 @@ document.addEventListener('change', e => {
   if (e.target.id === 'start') {
     const { id } = parseHash();
     const plan = store.get('plan', null);
-    const version = plan?.route === id ? plan.version : (D.routes[id].versions ? 'long' : null);
+    const version = plan?.route === id ? plan.version : (D.routes[id].versions?.length ? defaultVersion(D.routes[id]) : null);
     if (e.target.value) {
       store.set('plan', { route: id, start: e.target.value, version });
       toast('Даты сохранены — план поездки теперь на главной.');
@@ -596,16 +606,16 @@ function buildIndex() {
     let cur = { title, crumb, href, text: [] };
     idx.push(cur);
     for (const b of list || []) {
-      const head = b.heading || b.subheading;
+      const head = (b.type === 'heading' || b.type === 'subheading') && b.text;
       if (head && b.anchor) {
         cur = { title: plain(head), crumb: title, href: href.split('?')[0] + `?a=${b.anchor}`, text: [] };
         idx.push(cur);
         continue;
       }
-      if (b.plate) {  // плашка с ценой и часами — отдельный ответ: «нерпинарий», «музей Тальцы»
-        idx.push({ title: plain(b.plate.title), crumb: title, href: cur.href, text: [plain(`${b.plate.text || ''} ${b.plate.hours || ''}`)] });
+      if (b.type === 'plate') {  // плашка с ценой и часами — отдельный ответ: «нерпинарий», «музей Тальцы»
+        idx.push({ title: plain(b.title), crumb: title, href: cur.href, text: [plain(`${b.text || ''} ${b.hours || ''}`)] });
       }
-      cur.text.push(plain(JSON.stringify(Object.values(b)).replace(/https?:[^"\\]+/g, '').replace(/[{}[\]"]/g, ' ').replace(/\\n/g, ' ')));
+      cur.text.push(plain(JSON.stringify(Object.entries(b).filter(([k]) => k !== 'type' && k !== 'style').map(([, v]) => v)).replace(/https?:[^"\\]+/g, '').replace(/[{}[\]"]/g, ' ').replace(/\\n/g, ' ')));
     }
   };
   for (const [id, p] of Object.entries(D.pages)) add(p.title, 'Статья', `#/page/${id}`, p.blocks);
@@ -615,7 +625,7 @@ function buildIndex() {
     }
   }
   for (const [id, r] of Object.entries(D.routes)) {
-    add(`Маршрут №${r.number}. ${r.title}`, 'Маршрут', `#/route/${id}`, (r.days || []).map(d => ({ text: `${d.title} ${d.summary || ''} ${Object.values(d.parts || {}).flat().join(' ')}` })));
+    add(`Маршрут №${r.number}. ${r.title}`, 'Маршрут', `#/route/${id}`, (r.days || []).map(d => ({ type: 'text', text: `${d.title} ${d.summary || ''} ${(d.parts || []).flatMap(x => x.items).join(' ')}` })));
   }
   for (const h of D.hotelList) {
     idx.push({ title: plain(h.name), crumb: `Гостиница · ${D.places[h.place]?.title || ''}`, href: `#/place/${h.place}/stay?h=${h.id}`,
