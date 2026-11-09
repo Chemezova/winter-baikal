@@ -5,6 +5,9 @@
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const T = { t0: performance.now(), log: [] };
+function mark(name) { T.log.push(`${String(Math.round(performance.now() - T.t0)).padStart(6)} мс  ${name}`); }
+
 const store = {
   get(k, d) { try { const v = localStorage.getItem('wb-' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('wb-' + k, JSON.stringify(v)); } catch (e) { /* приватный режим */ } },
@@ -74,9 +77,11 @@ let KEY = null;
 
 async function unlock(code) {
   const keys = await (await fetch('data/keys.json')).json();
+  mark('ключи получены');
   const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(normCode(code)), 'PBKDF2', false, ['deriveBits']);
   const bits = new Uint8Array(await crypto.subtle.deriveBits(
     { name: 'PBKDF2', salt: b64(keys.salt), iterations: keys.iterations, hash: 'SHA-256' }, base, 512));
+  mark('код проверен (PBKDF2)');
   const id = hex(await crypto.subtle.digest('SHA-256', bits.slice(32))).slice(0, 24);
   const wrapped = keys.entries[id];
   if (!wrapped) return null;
@@ -700,13 +705,16 @@ async function start(code) {
   const k = await unlock(code);
   if (!k) return false;
   KEY = k;
+  store.set('code', normCode(code)); // запоминаем сразу, не дожидаясь загрузки путеводителя
   await loadGuide();
+  mark('путеводитель загружен и расшифрован');
   $('#cover-note').textContent = D.guide.updated ? `Обновление от ${new Date(D.guide.updated + 'T12:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}` : '';
-  try {
-    const v = await (await fetch('version.json')).json();
+  // версию не ждём: путеводитель открывается сразу, подпись дописывается, когда придёт
+  fetch('version.json').then(r => r.json()).then(v => {
     const note = $('#cover-note');
     note.textContent = `${note.textContent}${note.textContent ? ' · ' : ''}версия ${v.version}, собрана ${v.built}`;
-  } catch (e) { /* без версии приложение работает как раньше */ }
+    mark('версия получена');
+  }).catch(() => { /* без версии приложение работает как раньше */ });
   return true;
 }
 
@@ -741,12 +749,46 @@ $('#open').addEventListener('click', () => {
 
 (async () => {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* ничего */ }
   let seen = false;
   try { seen = sessionStorage.getItem('wb-cover') === '1'; } catch (e) { /* ничего */ }
   const code = store.get('code', null);
   if (!seen && !location.hash) $('#cover').hidden = false;
   if (code) {
-    try { if (await start(code)) { showApp(); return; } } catch (e) { /* покажем ввод кода */ }
+    try { if (await start(code)) { showApp(); mark('путеводитель показан'); return; } } catch (e) {
+      // нет связи: код подставляем сами, остаётся нажать «Открыть»
+      $('#code').value = code;
+      $('#lock-err').textContent = 'Не удалось связаться с сайтом. Нажмите «Открыть» ещё раз.';
+      $('#lock-err').hidden = false;
+    }
   }
   $('#lock').hidden = false;
+})();
+
+// Диагностика: 5 быстрых нажатий на подпись под кнопкой «Открыть путеводитель» показывают, где уходит время.
+(() => {
+  const note = $('#cover-note');
+  note.style.minHeight = '2.4em';
+  let taps = 0, last = 0;
+  note.addEventListener('click', async () => {
+    const now = Date.now(); taps = now - last < 1500 ? taps + 1 : 1; last = now;
+    if (taps < 5) return;
+    taps = 0;
+    let n = 0, names = [];
+    try { names = await caches.keys(); n = (await (await caches.open('wb-img')).keys()).length; } catch (e) { /* ничего */ }
+    let reg = null; try { reg = await navigator.serviceWorker.getRegistration(); } catch (e) { /* ничего */ }
+    const c = navigator.connection || {};
+    const lines = [...T.log,
+      '',
+      `код сохранён: ${store.get('code', null) ? 'да' : 'нет'}`,
+      `режим приложения (с иконки): ${navigator.standalone || matchMedia('(display-mode: standalone)').matches ? 'да' : 'нет'}`,
+      `service worker: ${reg ? (reg.active ? 'активен' : 'ждёт') : 'нет'}${navigator.serviceWorker && navigator.serviceWorker.controller ? ', управляет страницей' : ''}`,
+      `кэши: ${names.join(', ') || '—'}; фото в кэше: ${n}`,
+      `связь: ${c.effectiveType || '?'}, ${c.downlink || '?'} Мбит/с`];
+    const box = document.createElement('div');
+    box.style.cssText = 'position:fixed;left:0;right:0;bottom:0;max-height:70%;overflow:auto;background:#fff;color:#000;font:12px/1.4 monospace;padding:12px;white-space:pre-wrap;z-index:99999;border-top:2px solid #1a56a0';
+    box.textContent = lines.join('\n') + '\n\n(нажмите, чтобы закрыть)';
+    box.addEventListener('click', () => box.remove());
+    document.body.appendChild(box);
+  });
 })();
