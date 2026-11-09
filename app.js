@@ -8,6 +8,18 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const T = { t0: performance.now(), log: [] };
 function mark(name) { T.log.push(`${String(Math.round(performance.now() - T.t0)).padStart(6)} мс  ${name}`); }
 
+async function getLogged(url) {
+  const t = performance.now();
+  try {
+    const r = await fetch(url);
+    mark(`${url} → HTTP ${r.status}, ${Math.round(performance.now() - t)} мс`);
+    return r;
+  } catch (e) { mark(`${url} → ОШИБКА ${e.name}: ${e.message}, ${Math.round(performance.now() - t)} мс`); throw e; }
+}
+window.addEventListener('error', e => mark(`ошибка в коде: ${e.message}`));
+window.addEventListener('unhandledrejection', e => mark(`необработанная ошибка: ${e.reason && (e.reason.name + ': ' + e.reason.message)}`));
+function failText(base, e) { return `${base}\n\n[для Елены: ${e && e.name}: ${e && e.message}]\n${T.log.slice(-6).join('\n')}`; }
+
 const store = {
   get(k, d) { try { const v = localStorage.getItem('wb-' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('wb-' + k, JSON.stringify(v)); } catch (e) { /* приватный режим */ } },
@@ -76,7 +88,7 @@ function normCode(code) {
 let KEY = null;
 
 async function unlock(code) {
-  const keys = await (await fetch('data/keys.json')).json();
+  const keys = await (await getLogged('data/keys.json')).json();
   mark('ключи получены');
   const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(normCode(code)), 'PBKDF2', false, ['deriveBits']);
   const bits = new Uint8Array(await crypto.subtle.deriveBits(
@@ -92,7 +104,7 @@ async function unlock(code) {
 }
 
 async function openFile(url) {
-  const buf = new Uint8Array(await (await fetch(url)).arrayBuffer());
+  const buf = new Uint8Array(await (await (url.includes('/img/') ? fetch(url) : getLogged(url))).arrayBuffer());
   return crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, KEY, buf.slice(12));
 }
 
@@ -735,7 +747,8 @@ $('#lock-form').addEventListener('submit', async e => {
       err.hidden = false;
     }
   } catch (x) {
-    err.textContent = navigator.onLine ? 'Не получилось открыть путеводитель. Попробуйте ещё раз.' : 'Для первого открытия нужен интернет. Потом путеводитель работает и без него.';
+    err.textContent = navigator.onLine ? failText('Не получилось открыть путеводитель. Попробуйте ещё раз.', x) : 'Для первого открытия нужен интернет. Потом путеводитель работает и без него.';
+    err.style.whiteSpace = 'pre-wrap';
     err.hidden = false;
   }
   btn.disabled = false;
@@ -758,7 +771,8 @@ $('#open').addEventListener('click', () => {
     try { if (await start(code)) { showApp(); mark('путеводитель показан'); return; } } catch (e) {
       // нет связи: код подставляем сами, остаётся нажать «Открыть»
       $('#code').value = code;
-      $('#lock-err').textContent = 'Не удалось связаться с сайтом. Нажмите «Открыть» ещё раз.';
+      $('#lock-err').textContent = failText('Не удалось открыть путеводитель. Нажмите «Открыть» ещё раз.', e);
+      $('#lock-err').style.whiteSpace = 'pre-wrap';
       $('#lock-err').hidden = false;
     }
   }
