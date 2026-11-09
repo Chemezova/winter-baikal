@@ -232,10 +232,11 @@ function screenHome() {
   const about = groups().find(g => g.group.startsWith('О путеводителе'));
   const plan = store.get('plan', null);
   let planCard;
-  if (plan && D.routes[plan.route]) {
+  const planStart = plan && plan.start ? new Date(plan.start + 'T12:00:00') : null;
+  if (plan && D.routes[plan.route] && planStart && !isNaN(planStart)) { // план без даты (выбрали вариант, дату нет) карточкой не показываем
     const r = D.routes[plan.route];
     const days = routeDays(r, plan.version);
-    const a = new Date(plan.start + 'T12:00:00'), z = new Date(a.getTime() + (days.length - 1) * 864e5);
+    const a = planStart, z = new Date(a.getTime() + (days.length - 1) * 864e5);
     const f = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' });
     planCard = `<a class="plan" href="#/route/${plan.route}"><span class="ic">${icon('cal')}</span><span><b>Мой план: маршрут №${r.number}</b><small>${f.format(a)} — ${f.format(z)} · ${days.length} дн.</small></span></a>`;
   } else {
@@ -706,7 +707,11 @@ function showApp() {
   $('#app').hidden = false;
   $('#tabs').hidden = false;
   $('.nerpa-btn').hidden = false;
-  render();
+  try { render(); } catch (e) {
+    mark(`ошибка показа: ${e.name}: ${e.message}; план сброшен`);
+    store.set('plan', null);
+    render();
+  }
   // фото для работы без интернета докачиваем в фоне, когда путеводитель уже открыт
   setTimeout(() => {
     if ('serviceWorker' in navigator) navigator.serviceWorker.ready.then(r => r.active && r.active.postMessage('precache')).catch(() => {});
@@ -720,7 +725,8 @@ async function start(code) {
   store.set('code', normCode(code)); // запоминаем сразу, не дожидаясь загрузки путеводителя
   await loadGuide();
   mark('путеводитель загружен и расшифрован');
-  $('#cover-note').textContent = D.guide.updated ? `Обновление от ${new Date(D.guide.updated + 'T12:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}` : '';
+  const upd = D.guide.updated ? new Date(D.guide.updated + 'T12:00:00') : null;
+  $('#cover-note').textContent = upd && !isNaN(upd) ? `Обновление от ${upd.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}` : '';
   // версию не ждём: путеводитель открывается сразу, подпись дописывается, когда придёт
   fetch('version.json').then(r => r.json()).then(v => {
     const note = $('#cover-note');
