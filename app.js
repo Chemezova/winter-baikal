@@ -690,6 +690,10 @@ function showApp() {
   $('#tabs').hidden = false;
   $('.nerpa-btn').hidden = false;
   render();
+  // фото для работы без интернета докачиваем в фоне, когда путеводитель уже открыт
+  setTimeout(() => {
+    if ('serviceWorker' in navigator) navigator.serviceWorker.ready.then(r => r.active && r.active.postMessage('precache')).catch(() => {});
+  }, 6000);
 }
 
 async function start(code) {
