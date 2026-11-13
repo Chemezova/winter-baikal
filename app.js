@@ -172,9 +172,10 @@ function phoneLinks(phones, messengers = []) {
   return `<div class="phones">${(phones || []).map(p => {
     const d = intl(p);
     let s = `<a href="tel:+${d}">${icon('phone')}${esc(p)}</a>`;
-    if (messengers.includes('whatsapp')) s += `<a href="https://wa.me/${d}" target="_blank" rel="noopener">WhatsApp</a>`;
-    if (messengers.includes('telegram')) s += `<a href="https://t.me/+${d}" target="_blank" rel="noopener">Telegram</a>`;
-    if (messengers.includes('max')) s += '<span class="muted">есть в Max</span>';
+    const mob = /^79\d{9}$/.test(d); // мессенджеры только у мобильных, городским номерам кнопки не нужны
+    if (mob && messengers.includes('whatsapp')) s += `<a href="https://wa.me/${d}" target="_blank" rel="noopener">WhatsApp</a>`;
+    if (mob && messengers.includes('telegram')) s += `<a href="https://t.me/+${d}" target="_blank" rel="noopener">Telegram</a>`;
+    if (mob && messengers.includes('max')) s += '<span class="muted">есть в Max</span>';
     return s;
   }).join('')}</div>`;
 }
