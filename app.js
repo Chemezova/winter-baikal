@@ -5,25 +5,18 @@
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-const T = { t0: performance.now(), log: [] };
-function mark(name) { T.log.push(`${String(Math.round(performance.now() - T.t0)).padStart(6)} мс  ${name}`); }
-
-async function getLogged(url) {
-  const t = performance.now();
-  try {
-    const r = await fetch(url);
-    mark(`${url} → HTTP ${r.status}, ${Math.round(performance.now() - t)} мс`);
-    return r;
-  } catch (e) { mark(`${url} → ОШИБКА ${e.name}: ${e.message}, ${Math.round(performance.now() - t)} мс`); throw e; }
-}
-window.addEventListener('error', e => mark(`ошибка в коде: ${e.message}`));
-window.addEventListener('unhandledrejection', e => mark(`необработанная ошибка: ${e.reason && (e.reason.name + ': ' + e.reason.message)}`));
-function failText(base, e) { return `${base}\n\n[для Елены: ${e && e.name}: ${e && e.message}]\n${T.log.slice(-6).join('\n')}`; }
 
 const store = {
   get(k, d) { try { const v = localStorage.getItem('wb-' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('wb-' + k, JSON.stringify(v)); } catch (e) { /* приватный режим */ } },
 };
+/* Связь с Еленой. Адрес и ссылку на опрос меняем здесь. Пустая ссылка на опрос — кнопка не показывается. */
+const SUPPORT_EMAIL = 'elena@chemezova.ru';
+const FEEDBACK_FORM = 'https://forms.yandex.ru/u/6afefb3a1f1eb55b8f0309d3';   // опрос в Яндекс Формах (L5)
+const mailHref = (subject, body) => `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+const helpHref = () => mailHref('Зимний Байкал: не получается войти',
+  'Здравствуйте, Елена!\n\nНе получается войти в приложение «Зимний Байкал».\nПочта, на которую приходило письмо с кодом: \nУстройство (iPhone / Android): \nЧто происходит: \n');
+const feedbackHref = () => mailHref('Зимний Байкал: отзыв', 'Здравствуйте, Елена!\n\nМой отзыв о приложении:\n\nЧто удобно: \nЧто неудобно: \n');
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const plain = s => String(s ?? '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/\*+/g, '');
 
@@ -88,12 +81,10 @@ function normCode(code) {
 let KEY = null;
 
 async function unlock(code) {
-  const keys = await (await getLogged('data/keys.json')).json();
-  mark('ключи получены');
+  const keys = await (await fetch('data/keys.json')).json();
   const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(normCode(code)), 'PBKDF2', false, ['deriveBits']);
   const bits = new Uint8Array(await crypto.subtle.deriveBits(
     { name: 'PBKDF2', salt: b64(keys.salt), iterations: keys.iterations, hash: 'SHA-256' }, base, 512));
-  mark('код проверен (PBKDF2)');
   const id = hex(await crypto.subtle.digest('SHA-256', bits.slice(32))).slice(0, 24);
   const wrapped = keys.entries[id];
   if (!wrapped) return null;
@@ -104,7 +95,7 @@ async function unlock(code) {
 }
 
 async function openFile(url) {
-  const buf = new Uint8Array(await (await (url.includes('/img/') ? fetch(url) : getLogged(url))).arrayBuffer());
+  const buf = new Uint8Array(await (await fetch(url)).arrayBuffer());
   return crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, KEY, buf.slice(12));
 }
 
@@ -288,7 +279,17 @@ let menuOpen = new Set(store.get('menuOpen', []));
 function screenMenu() {
   return `<div class="topbar gut"><span class="title">Содержание</span></div>
   <div class="gut"><div class="block"><input class="filter" id="menu-filter" type="search" placeholder="Найти раздел" aria-label="Найти раздел"></div>
-  <div id="tree">${menuTree('')}</div><div style="height:24px"></div></div>`;
+  <div id="tree">${menuTree('')}</div>
+  <div class="block help">
+    <h2>Помощь и отзывы</h2>
+    ${FEEDBACK_FORM ? `<p><a href="${esc(FEEDBACK_FORM)}" target="_blank" rel="noopener">Пройти короткий опрос (1–2 минуты)</a></p>` : ''}
+    <p><a href="${esc(feedbackHref())}">Написать Елене: что удобно, что нет</a></p>
+    <p><a href="${esc(helpHref())}">Не получается войти или нужна помощь</a></p>
+    <details><summary>Мой код доступа</summary>
+      <p>Сохраните его: он понадобится, если вы поставите путеводитель на другой телефон.</p>
+      <p><b>${esc(store.get('code', 'не найден'))}</b></p>
+    </details>
+  </div><div style="height:24px"></div></div>`;
 }
 
 function menuTree(filter) {
@@ -709,8 +710,7 @@ function showApp() {
   $('#tabs').hidden = false;
   $('.nerpa-btn').hidden = false;
   try { render(); } catch (e) {
-    mark(`ошибка показа: ${e.name}: ${e.message}; план сброшен`);
-    store.set('plan', null);
+    store.set('plan', null);   // сохранённый план мог быть повреждён: сбрасываем и показываем заново
     render();
   }
   // фото для работы без интернета докачиваем в фоне, когда путеводитель уже открыт
@@ -725,14 +725,12 @@ async function start(code) {
   KEY = k;
   store.set('code', normCode(code)); // запоминаем сразу, не дожидаясь загрузки путеводителя
   await loadGuide();
-  mark('путеводитель загружен и расшифрован');
   const upd = D.guide.updated ? new Date(D.guide.updated + 'T12:00:00') : null;
   $('#cover-note').textContent = upd && !isNaN(upd) ? `Обновление от ${upd.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}` : '';
   // версию не ждём: путеводитель открывается сразу, подпись дописывается, когда придёт
   fetch('version.json').then(r => r.json()).then(v => {
     const note = $('#cover-note');
     note.textContent = `${note.textContent}${note.textContent ? ' · ' : ''}версия ${v.version}, собрана ${v.built}`;
-    mark('версия получена');
   }).catch(() => { /* без версии приложение работает как раньше */ });
   return true;
 }
@@ -754,13 +752,14 @@ $('#lock-form').addEventListener('submit', async e => {
       err.hidden = false;
     }
   } catch (x) {
-    err.textContent = navigator.onLine ? failText('Не получилось открыть путеводитель. Попробуйте ещё раз.', x) : 'Для первого открытия нужен интернет. Потом путеводитель работает и без него.';
-    err.style.whiteSpace = 'pre-wrap';
+    err.textContent = navigator.onLine ? 'Не получилось открыть путеводитель. Попробуйте ещё раз.' : 'Для первого открытия нужен интернет. Потом путеводитель работает и без него.';
     err.hidden = false;
   }
   btn.disabled = false;
   btn.textContent = 'Открыть';
 });
+
+$('#help-link').href = helpHref();
 
 $('#open').addEventListener('click', () => {
   $('#cover').hidden = true;
@@ -775,41 +774,15 @@ $('#open').addEventListener('click', () => {
   const code = store.get('code', null);
   if (!seen && !location.hash) $('#cover').hidden = false;
   if (code) {
-    try { if (await start(code)) { showApp(); mark('путеводитель показан'); return; } } catch (e) {
+    try { if (await start(code)) { showApp(); return; } } catch (e) {
       // нет связи: код подставляем сами, остаётся нажать «Открыть»
       $('#code').value = code;
-      $('#lock-err').textContent = failText('Не удалось открыть путеводитель. Нажмите «Открыть» ещё раз.', e);
-      $('#lock-err').style.whiteSpace = 'pre-wrap';
+      $('#lock-err').textContent = 'Не удалось открыть путеводитель. Нажмите «Открыть» ещё раз.';
       $('#lock-err').hidden = false;
     }
   }
   $('#lock').hidden = false;
 })();
 
-// Диагностика: 5 быстрых нажатий на подпись под кнопкой «Открыть путеводитель» показывают, где уходит время.
-(() => {
-  const note = $('#cover-note');
-  note.style.minHeight = '2.4em';
-  let taps = 0, last = 0;
-  note.addEventListener('click', async () => {
-    const now = Date.now(); taps = now - last < 1500 ? taps + 1 : 1; last = now;
-    if (taps < 5) return;
-    taps = 0;
-    let n = 0, names = [];
-    try { names = await caches.keys(); n = (await (await caches.open('wb-img')).keys()).length; } catch (e) { /* ничего */ }
-    let reg = null; try { reg = await navigator.serviceWorker.getRegistration(); } catch (e) { /* ничего */ }
-    const c = navigator.connection || {};
-    const lines = [...T.log,
-      '',
-      `код сохранён: ${store.get('code', null) ? 'да' : 'нет'}`,
-      `режим приложения (с иконки): ${navigator.standalone || matchMedia('(display-mode: standalone)').matches ? 'да' : 'нет'}`,
-      `service worker: ${reg ? (reg.active ? 'активен' : 'ждёт') : 'нет'}${navigator.serviceWorker && navigator.serviceWorker.controller ? ', управляет страницей' : ''}`,
-      `кэши: ${names.join(', ') || '—'}; фото в кэше: ${n}`,
-      `связь: ${c.effectiveType || '?'}, ${c.downlink || '?'} Мбит/с`];
-    const box = document.createElement('div');
-    box.style.cssText = 'position:fixed;left:0;right:0;bottom:0;max-height:70%;overflow:auto;background:#fff;color:#000;font:12px/1.4 monospace;padding:12px;white-space:pre-wrap;z-index:99999;border-top:2px solid #1a56a0';
-    box.textContent = lines.join('\n') + '\n\n(нажмите, чтобы закрыть)';
-    box.addEventListener('click', () => box.remove());
-    document.body.appendChild(box);
-  });
-})();
+// Место под подпись («Обновление от …, версия …») резервируем, чтобы кнопка не прыгала, когда подпись допишется.
+$('#cover-note').style.minHeight = '2.4em';

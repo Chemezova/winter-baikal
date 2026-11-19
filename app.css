@@ -87,6 +87,12 @@ svg.i { width: 22px; height: 22px; flex: none; }
 .lock input:focus { border-color: var(--accent); outline: none; }
 .lock .btn { min-height: 50px; font-size: 16px; }
 .lock-err { color: var(--minus) !important; }
+.lock-help a { color: var(--accent); }
+.help { font: 15px/1.5 var(--f-head); }
+.help h2 { margin-bottom: 8px; }
+.help p { margin: 6px 0; }
+.help summary { cursor: pointer; padding: 6px 0; }
+.help a { color: var(--accent); }
 
 /* главная */
 .searchbar { display: flex; align-items: center; gap: 10px; width: 100%; border: 1px solid var(--line); background: var(--paper); border-radius: 24px; padding: 6px 6px 6px 14px; cursor: pointer; text-align: left; color: var(--muted); font: 15px/1.2 var(--f-head); }
