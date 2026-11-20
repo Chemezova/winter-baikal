@@ -40,7 +40,7 @@
       <button class="btn solid" type="submit" id="lock-go">Открыть</button>
     </form>
     <p class="lock-err" id="lock-err" hidden></p>
-    <p class="lock-help"><a id="help-link" href="#">Не получается войти или потерян код? Написать Елене</a></p>
+    <p class="lock-help"><a id="help-link" href="#">Не получается войти или потерян код? Написать Елене</a><br><small>Если письмо не открылось, напишите на <span id="help-mail"></span></small></p>
   </div>
 </div>
 
@@ -65,6 +65,13 @@
   </div>
 </div>
 
+<div class="sheet" id="cal-sheet" hidden>
+  <div class="panel gut" role="dialog" aria-modal="true" aria-labelledby="cal-title">
+    <div class="nerpa-head"><b id="cal-title" class="cal-title">В какой календарь добавить?</b><button class="x" type="button" data-close aria-label="Закрыть">×</button></div>
+    <div class="cal-body" id="cal-body"></div>
+  </div>
+</div>
+
 <nav class="tabs" id="tabs" aria-label="Разделы" hidden>
   <div class="tabs-in">
     <a href="#/home" data-tab="home" data-ico="home">Главная</a>
@@ -73,6 +80,8 @@
     <a href="#/fav" data-tab="fav" data-ico="heart">Избранное</a>
   </div>
 </nav>
+
+<div class="owner" id="owner" aria-hidden="true" hidden></div>
 
 <div class="toast" id="toast" role="status" hidden></div>
 <script src="app.js"></script>

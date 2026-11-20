@@ -11,7 +11,7 @@ const store = {
   set(k, v) { try { localStorage.setItem('wb-' + k, JSON.stringify(v)); } catch (e) { /* приватный режим */ } },
 };
 /* Связь с Еленой. Адрес и ссылку на опрос меняем здесь. Пустая ссылка на опрос — кнопка не показывается. */
-const SUPPORT_EMAIL = 'elena@chemezova.ru';
+const SUPPORT_EMAIL = 'chemezova-ru@yandex.ru';
 const FEEDBACK_FORM = 'https://forms.yandex.ru/u/6afefb3a1f1eb55b8f0309d3';   // опрос в Яндекс Формах (L5)
 const mailHref = (subject, body) => `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 const helpHref = () => mailHref('Зимний Байкал: не получается войти',
@@ -79,6 +79,14 @@ function normCode(code) {
 }
 
 let KEY = null;
+let OWNER = '';
+
+/* Подпись экземпляра: короткая метка из кода. По ней Елена находит, чей экземпляр попал в чужие руки
+   (python tools/whose_code.py МЕТКА). Из метки код восстановить нельзя. */
+async function ownerTag(code) {
+  const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('wb-tag/' + normCode(code)));
+  return hex(h).slice(0, 5).toUpperCase();
+}
 
 async function unlock(code) {
   const keys = await (await fetch('data/keys.json')).json();
@@ -282,9 +290,10 @@ function screenMenu() {
   <div id="tree">${menuTree('')}</div>
   <div class="block help">
     <h2>Помощь и отзывы</h2>
-    ${FEEDBACK_FORM ? `<p><a href="${esc(FEEDBACK_FORM)}" target="_blank" rel="noopener">Пройти короткий опрос (1–2 минуты)</a></p>` : ''}
-    <p><a href="${esc(feedbackHref())}">Написать Елене: что удобно, что нет</a></p>
-    <p><a href="${esc(helpHref())}">Не получается войти или нужна помощь</a></p>
+    ${FEEDBACK_FORM ? `<p><a href="${esc(FEEDBACK_FORM)}" target="_blank" rel="noopener">Пройти короткий опрос о работе приложения (1-2 минуты, анонимно)</a></p>` : ''}
+    <p><a href="${esc(feedbackHref())}">Написать Елене</a></p>
+    <p><a href="${esc(helpHref())}">Нужна помощь</a></p>
+    <p class="muted">Если письмо не открылось, напишите на ${esc(SUPPORT_EMAIL)}</p>
     <details><summary>Мой код доступа</summary>
       <p>Сохраните его: он понадобится, если вы поставите путеводитель на другой телефон.</p>
       <p><b>${esc(store.get('code', 'не найден'))}</b></p>
@@ -482,6 +491,56 @@ function makeICS(id) {
   return lines.map(fold).join('\r\n') + '\r\n';
 }
 
+/** Скачивание файла календаря (все дни сразу): его откроет календарь телефона или импорт в другом календаре. */
+function downloadICS(id) {
+  const blob = new Blob([makeICS(id)], { type: 'text/calendar;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `baikal-marshrut-${D.routes[id].number}.ics`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  closeSheet();
+  toast('Файл календаря готов: откройте его, чтобы добавить дни поездки в календарь.');
+}
+
+/** Ссылки «добавить в Google Календарь»: одна ссылка — одно событие (дня), календарь человек выбирает уже в Google. */
+function googleDayLinks(id) {
+  const r = D.routes[id];
+  const plan = store.get('plan', null);
+  const days = routeDays(r, plan?.version);
+  const s0 = new Date(plan.start + 'T12:00:00');
+  const ymd = d => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  const fmt = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' });
+  return days.map((d, i) => {
+    const a = new Date(s0.getTime() + i * 864e5), z = new Date(a.getTime() + 864e5);
+    let details = [d.summary, ...(d.parts || []).map(x => `${x.part.toUpperCase()}: ${(x.items || []).map(plain).join('; ')}`)]
+      .filter(Boolean).map(plain).join('\n');
+    if (details.length > 400) details = details.slice(0, 400).replace(/\s+\S*$/, '') + '…';   // ссылка не должна быть слишком длинной
+    details += '\n\nПутеводитель «Зимний Байкал», Елена Чемезова';
+    const url = 'https://calendar.google.com/calendar/render?action=TEMPLATE'
+      + `&text=${encodeURIComponent(`Байкал, день ${i + 1}: ${plain(d.title)}`)}`
+      + `&dates=${ymd(a)}/${ymd(z)}&details=${encodeURIComponent(details)}`;
+    return `<a class="cal-day" href="${esc(url)}" target="_blank" rel="noopener"><b>День ${i + 1} · ${fmt.format(a)}</b><span>${esc(plain(d.title))}</span></a>`;
+  }).join('');
+}
+
+const calSheet = $('#cal-sheet');
+function openCalSheet(id) {
+  if (!store.get('plan', null)?.start) { toast('Сначала выберите первый день поездки.'); return; }
+  $('#cal-body').innerHTML = `
+    <div class="cal-opt">
+      <button class="btn solid" type="button" data-cal="file">${icon('cal')}Календарь телефона (файл)</button>
+      <p class="small muted">Все дни сразу. Они добавятся в календарь, который на телефоне выбран по умолчанию. На iPhone его можно сменить: Настройки → Календарь → Календарь по умолчанию. Этот же файл подойдёт для импорта в Яндекс Календарь, Outlook и другие.</p>
+    </div>
+    <div class="cal-opt">
+      <button class="btn" type="button" data-cal="google" aria-expanded="false">Google Календарь (по дням)</button>
+      <p class="small muted">Каждый день добавляется отдельным нажатием, календарь вы выбираете уже в Google.</p>
+      <div class="cal-days" id="cal-google" hidden>${googleDayLinks(id)}</div>
+    </div>`;
+  calSheet.hidden = false;
+}
+
 /* --- избранное --- */
 function screenFav() {
   const rows = favs.map(k => {
@@ -583,16 +642,12 @@ document.addEventListener('click', e => {
     render();
     return;
   }
-  if (t.closest('#ics')) {
-    const { id } = parseHash();
-    const blob = new Blob([makeICS(id)], { type: 'text/calendar;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `baikal-marshrut-${D.routes[id].number}.ics`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    toast('Файл календаря готов: откройте его, чтобы добавить дни поездки в календарь телефона.');
+  if (t.closest('#ics')) { openCalSheet(parseHash().id); return; }
+  if (t.closest('[data-cal="file"]')) { downloadICS(parseHash().id); return; }
+  if (t.closest('[data-cal="google"]')) {
+    const box = $('#cal-google');
+    box.hidden = !box.hidden;
+    t.closest('[data-cal="google"]').setAttribute('aria-expanded', String(!box.hidden));
     return;
   }
   if (t.closest('a[href^="#/"]')) sessionStorage.setItem('wb-nav', '1');
@@ -691,9 +746,10 @@ function openSheet() {
   sheet.hidden = false;
   $('#q').focus({ preventScroll: true });
 }
-function closeSheet() { sheet.hidden = true; }
+function closeSheet() { sheet.hidden = true; calSheet.hidden = true; }
 $('#nerpa-close').addEventListener('click', closeSheet);
 sheet.addEventListener('click', e => { if (e.target === sheet || e.target.closest('[data-close]')) closeSheet(); });
+calSheet.addEventListener('click', e => { if (e.target === calSheet || e.target.closest('[data-close]')) closeSheet(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
 $('#search-form').addEventListener('submit', e => { e.preventDefault(); search($('#q').value); });
 $('#sugg').innerHTML = SUGG.map(s => `<button class="chip" type="button">${s}</button>`).join('');
@@ -709,6 +765,7 @@ function showApp() {
   $('#app').hidden = false;
   $('#tabs').hidden = false;
   $('.nerpa-btn').hidden = false;
+  if (OWNER) { const o = $('#owner'); o.textContent = `Экземпляр ${OWNER}`; o.hidden = false; }
   try { render(); } catch (e) {
     store.set('plan', null);   // сохранённый план мог быть повреждён: сбрасываем и показываем заново
     render();
@@ -723,6 +780,7 @@ async function start(code) {
   const k = await unlock(code);
   if (!k) return false;
   KEY = k;
+  try { OWNER = await ownerTag(code); } catch (e) { OWNER = ''; }
   store.set('code', normCode(code)); // запоминаем сразу, не дожидаясь загрузки путеводителя
   await loadGuide();
   const upd = D.guide.updated ? new Date(D.guide.updated + 'T12:00:00') : null;
@@ -760,6 +818,7 @@ $('#lock-form').addEventListener('submit', async e => {
 });
 
 $('#help-link').href = helpHref();
+$('#help-mail').textContent = SUPPORT_EMAIL;
 
 $('#open').addEventListener('click', () => {
   $('#cover').hidden = true;

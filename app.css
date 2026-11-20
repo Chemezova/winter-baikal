@@ -91,6 +91,8 @@ svg.i { width: 22px; height: 22px; flex: none; }
 .help { font: 15px/1.5 var(--f-head); }
 .help h2 { margin-bottom: 8px; }
 .help p { margin: 6px 0; }
+.help .muted { font-size: 13px; color: var(--muted); user-select: text; }
+.lock-help small { font-size: 13px; user-select: text; }
 .help summary { cursor: pointer; padding: 6px 0; }
 .help a { color: var(--accent); }
 
@@ -290,7 +292,20 @@ table.prices td:last-child { white-space: nowrap; text-align: right; color: var(
 .res mark { background: var(--plate-head); color: inherit; border-radius: 2px; }
 .x { margin-left: auto; align-self: flex-start; border: 0; background: none; color: var(--muted); font: 26px/1 var(--f-head); cursor: pointer; padding: 0 4px; }
 
+.cal-title { font: 500 18px/1.3 var(--f-head); }
+.cal-body { display: flex; flex-direction: column; gap: 18px; }
+.cal-opt { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+.cal-opt .btn { min-height: 48px; }
+.cal-opt p { margin: 0; }
+.cal-days { display: flex; flex-direction: column; gap: 6px; }
+.cal-day { display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; text-decoration: none; color: var(--ink); }
+.cal-day b { font: 500 14px/1.3 var(--f-head); color: var(--brand); }
+.cal-day span { font: 13px/1.4 var(--f-head); }
+
 .toast { position: fixed; z-index: 50; left: 50%; transform: translateX(-50%); bottom: calc(150px + env(safe-area-inset-bottom, 0px)); width: min(440px, calc(100% - 32px)); background: var(--ink); color: var(--paper); font: 14px/1.4 var(--f-head); padding: 11px 14px; border-radius: 10px; box-shadow: var(--shadow); }
 .loading { padding: 60px 20px; text-align: center; font: 15px var(--f-head); color: var(--muted); }
 
 @media (prefers-reduced-motion: reduce) { .hl { animation: none; } img.dec { transition: none; } .day .chev, .node .row .chev { transition: none; } }
+
+/* Подпись экземпляра: видна на любом скриншоте, но не мешает чтению */
+.owner { position: fixed; left: 10px; bottom: calc(66px + env(safe-area-inset-bottom, 0px)); z-index: 5; font: 10px/1 var(--f-head); letter-spacing: .04em; color: var(--muted); background: var(--paper); padding: 3px 6px; border-radius: 6px; opacity: .8; pointer-events: none; user-select: none; }
