@@ -504,39 +504,18 @@ function downloadICS(id) {
   toast('Файл календаря готов: откройте его, чтобы добавить дни поездки в календарь.');
 }
 
-/** Ссылки «добавить в Google Календарь»: одна ссылка — одно событие (дня), календарь человек выбирает уже в Google. */
-function googleDayLinks(id) {
-  const r = D.routes[id];
-  const plan = store.get('plan', null);
-  const days = routeDays(r, plan?.version);
-  const s0 = new Date(plan.start + 'T12:00:00');
-  const ymd = d => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
-  const fmt = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' });
-  return days.map((d, i) => {
-    const a = new Date(s0.getTime() + i * 864e5), z = new Date(a.getTime() + 864e5);
-    let details = [d.summary, ...(d.parts || []).map(x => `${x.part.toUpperCase()}: ${(x.items || []).map(plain).join('; ')}`)]
-      .filter(Boolean).map(plain).join('\n');
-    if (details.length > 400) details = details.slice(0, 400).replace(/\s+\S*$/, '') + '…';   // ссылка не должна быть слишком длинной
-    details += '\n\nПутеводитель «Зимний Байкал», Елена Чемезова';
-    const url = 'https://calendar.google.com/calendar/render?action=TEMPLATE'
-      + `&text=${encodeURIComponent(`Байкал, день ${i + 1}: ${plain(d.title)}`)}`
-      + `&dates=${ymd(a)}/${ymd(z)}&details=${encodeURIComponent(details)}`;
-    return `<a class="cal-day" href="${esc(url)}" target="_blank" rel="noopener"><b>День ${i + 1} · ${fmt.format(a)}</b><span>${esc(plain(d.title))}</span></a>`;
-  }).join('');
-}
-
 const calSheet = $('#cal-sheet');
 function openCalSheet(id) {
   if (!store.get('plan', null)?.start) { toast('Сначала выберите первый день поездки.'); return; }
   $('#cal-body').innerHTML = `
     <div class="cal-opt">
-      <button class="btn solid" type="button" data-cal="file">${icon('cal')}Календарь телефона (файл)</button>
-      <p class="small muted">Все дни сразу. Они добавятся в календарь, который на телефоне выбран по умолчанию. На iPhone его можно сменить: Настройки → Календарь → Календарь по умолчанию. Этот же файл подойдёт для импорта в Яндекс Календарь, Outlook и другие.</p>
+      <button class="btn solid" type="button" data-cal="file">${icon('cal')}Скачать файл календаря</button>
+      <p class="small muted">Все дни поездки добавятся сразу, в тот календарь, который на телефоне выбран по умолчанию.</p>
     </div>
-    <div class="cal-opt">
-      <button class="btn" type="button" data-cal="google" aria-expanded="false">Google Календарь (по дням)</button>
-      <p class="small muted">Каждый день добавляется отдельным нажатием, календарь вы выбираете уже в Google.</p>
-      <div class="cal-days" id="cal-google" hidden>${googleDayLinks(id)}</div>
+    <div class="cal-how small">
+      <b>Если вы пользуетесь Google, Яндекс, Outlook или другим календарём</b>
+      <p>Подключите его к телефону и выберите календарём по умолчанию. На iPhone: Настройки → Календарь → Учётные записи (подключить), затем Настройки → Календарь → Календарь по умолчанию.</p>
+      <p>Или откройте файл в сайте или приложении нужного календаря: у большинства календарей есть импорт файлов .ics.</p>
     </div>`;
   calSheet.hidden = false;
 }
@@ -644,12 +623,6 @@ document.addEventListener('click', e => {
   }
   if (t.closest('#ics')) { openCalSheet(parseHash().id); return; }
   if (t.closest('[data-cal="file"]')) { downloadICS(parseHash().id); return; }
-  if (t.closest('[data-cal="google"]')) {
-    const box = $('#cal-google');
-    box.hidden = !box.hidden;
-    t.closest('[data-cal="google"]').setAttribute('aria-expanded', String(!box.hidden));
-    return;
-  }
   if (t.closest('a[href^="#/"]')) sessionStorage.setItem('wb-nav', '1');
 });
 

@@ -297,10 +297,8 @@ table.prices td:last-child { white-space: nowrap; text-align: right; color: var(
 .cal-opt { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
 .cal-opt .btn { min-height: 48px; }
 .cal-opt p { margin: 0; }
-.cal-days { display: flex; flex-direction: column; gap: 6px; }
-.cal-day { display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; text-decoration: none; color: var(--ink); }
-.cal-day b { font: 500 14px/1.3 var(--f-head); color: var(--brand); }
-.cal-day span { font: 13px/1.4 var(--f-head); }
+.cal-how { display: flex; flex-direction: column; gap: 6px; padding: 12px; background: var(--plate); border-radius: 10px; }
+.cal-how p { margin: 0; }
 
 .toast { position: fixed; z-index: 50; left: 50%; transform: translateX(-50%); bottom: calc(150px + env(safe-area-inset-bottom, 0px)); width: min(440px, calc(100% - 32px)); background: var(--ink); color: var(--paper); font: 14px/1.4 var(--f-head); padding: 11px 14px; border-radius: 10px; box-shadow: var(--shadow); }
 .loading { padding: 60px 20px; text-align: center; font: 15px var(--f-head); color: var(--muted); }
