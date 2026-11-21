@@ -93,6 +93,10 @@ svg.i { width: 22px; height: 22px; flex: none; }
 .help p { margin: 6px 0; }
 .help .muted { font-size: 13px; color: var(--muted); user-select: text; }
 .lock-help small { font-size: 13px; user-select: text; }
+.lock-help #help-mail, .mail-row a { color: var(--accent); user-select: text; word-break: break-all; }
+.mail-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.copy-mail { min-height: 36px; padding: 6px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--brand); font: 500 13px/1.2 var(--f-head); cursor: pointer; }
+.copy-mail:active { background: var(--plate); }
 .help summary { cursor: pointer; padding: 6px 0; }
 .help a { color: var(--accent); }
 

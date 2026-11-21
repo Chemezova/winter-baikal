@@ -10,6 +10,8 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem('wb-' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('wb-' + k, JSON.stringify(v)); } catch (e) { /* приватный режим */ } },
 };
+const IS_ANDROID = /Android/i.test(navigator.userAgent);
+
 /* Связь с Еленой. Адрес и ссылку на опрос меняем здесь. Пустая ссылка на опрос — кнопка не показывается. */
 const SUPPORT_EMAIL = 'chemezova-ru@yandex.ru';
 const FEEDBACK_FORM = 'https://forms.yandex.ru/u/6afefb3a1f1eb55b8f0309d3';   // опрос в Яндекс Формах (L5)
@@ -293,7 +295,8 @@ function screenMenu() {
     ${FEEDBACK_FORM ? `<p><a href="${esc(FEEDBACK_FORM)}" target="_blank" rel="noopener">Пройти короткий опрос о работе приложения (1-2 минуты, анонимно)</a></p>` : ''}
     <p><a href="${esc(feedbackHref())}">Написать Елене</a></p>
     <p><a href="${esc(helpHref())}">Нужна помощь</a></p>
-    <p class="muted">Если письмо не открылось, напишите на ${esc(SUPPORT_EMAIL)}</p>
+    <p class="mail-row">Наш адрес: <a href="mailto:${esc(SUPPORT_EMAIL)}">${esc(SUPPORT_EMAIL)}</a> <button class="copy-mail" type="button" data-copy="${esc(SUPPORT_EMAIL)}">Копировать</button></p>
+    <p class="muted" id="app-ver">${store.get('ver', '') ? 'Приложение: ' + esc(store.get('ver', '')) : ''}</p>
     <details><summary>Мой код доступа</summary>
       <p>Сохраните его: он понадобится, если вы поставите путеводитель на другой телефон.</p>
       <p><b>${esc(store.get('code', 'не найден'))}</b></p>
@@ -501,7 +504,9 @@ function downloadICS(id) {
   a.click();
   a.remove();
   closeSheet();
-  toast('Файл календаря готов: откройте его, чтобы добавить дни поездки в календарь.');
+  toast(IS_ANDROID
+    ? 'Файл скачан. Нажмите на уведомление о загрузке или откройте файл в приложении «Мои файлы» или «Диспетчер файлов»: календарь предложит добавить события.'
+    : 'Файл календаря готов: откройте его, чтобы добавить дни поездки в календарь.');
 }
 
 const calSheet = $('#cal-sheet');
@@ -511,6 +516,7 @@ function openCalSheet(id) {
     <div class="cal-opt">
       <button class="btn solid" type="button" data-cal="file">${icon('cal')}Скачать файл календаря</button>
       <p class="small muted">Все дни поездки добавятся сразу, в тот календарь, который на телефоне выбран по умолчанию.</p>
+      ${IS_ANDROID ? `<p class="small"><b>На Android</b> файл сохраняется в «Загрузки» и сам не открывается. После скачивания нажмите на уведомление «Загрузка завершена» или найдите файл в приложении «Мои файлы» или «Диспетчер файлов» (папка «Загрузки» или Download). Нажмите на файл, и календарь предложит добавить события.</p>` : ''}
     </div>
     <div class="cal-how small">
       <b>Если вы пользуетесь Google, Яндекс, Outlook или другим календарём</b>
@@ -578,8 +584,31 @@ function render() {
 
 window.addEventListener('hashchange', () => { closeSheet(); render(); });
 
+/** Копирует текст в буфер обмена; запасной способ — для телефонов, где clipboard API недоступен. */
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch (e) { /* пробуем запасной способ */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand('copy'); ta.remove(); return ok;
+  } catch (e) { return false; }
+}
+
 document.addEventListener('click', e => {
   const t = e.target;
+  const cp = t.closest('[data-copy]');
+  if (cp) {
+    e.preventDefault();
+    copyText(cp.dataset.copy).then(ok => {
+      const old = cp.dataset.label || cp.textContent;
+      cp.dataset.label = old;
+      cp.textContent = ok ? 'Скопировано ✓' : 'Не получилось';
+      if (!ok) toast('Не получилось скопировать: нажмите на адрес и удерживайте, чтобы выделить его');
+      setTimeout(() => { cp.textContent = old; }, 2000);
+    });
+    return;
+  }
   const fav = t.closest('[data-fav]');
   if (fav) { e.preventDefault(); toggleFav(fav.dataset.fav); return; }
   if (t.closest('[data-back]')) {
@@ -761,7 +790,11 @@ async function start(code) {
   // версию не ждём: путеводитель открывается сразу, подпись дописывается, когда придёт
   fetch('version.json').then(r => r.json()).then(v => {
     const note = $('#cover-note');
-    note.textContent = `${note.textContent}${note.textContent ? ' · ' : ''}версия ${v.version}, собрана ${v.built}`;
+    const ver = `версия ${v.version}, собрана ${v.built}`;
+    note.textContent = `${note.textContent}${note.textContent ? ' · ' : ''}${ver}`;
+    store.set('ver', ver);                       // запоминаем: без интернета в «Помощи» покажем последнюю известную
+    const h = $('#app-ver');
+    if (h) h.textContent = `Приложение: ${ver}`;
   }).catch(() => { /* без версии приложение работает как раньше */ });
   return true;
 }
@@ -792,6 +825,8 @@ $('#lock-form').addEventListener('submit', async e => {
 
 $('#help-link').href = helpHref();
 $('#help-mail').textContent = SUPPORT_EMAIL;
+$('#help-mail').href = `mailto:${SUPPORT_EMAIL}`;
+$('#help-copy').dataset.copy = SUPPORT_EMAIL;
 
 $('#open').addEventListener('click', () => {
   $('#cover').hidden = true;
